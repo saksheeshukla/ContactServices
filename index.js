@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
 const app = express();
 
 const port = process.env.PORT || 8080;
@@ -14,6 +15,12 @@ app.use(express.json());
 app.use(express.urlencoded({extended:true}));
 const validateFormData = require('./middlewares/validateFormData.js');
 const verifyToken = require('./middlewares/verifyToken.js');
+
+const corsOptions = {
+  origin : '*',
+  methods : ['GET','POST','DELETE','PUT']
+}
+app.use(cors(corsOptions));
 
 //ErrorHandler
 app.use((err, req, res, next) => {
