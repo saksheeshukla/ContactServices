@@ -1,51 +1,19 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const app = express();
-const port = process.env.PORT || 3000;
 
-//connect to mongodb
-mongoose.connect('mongodb+srv://sakshee1234shukla:sakshee1234shukla@cluster0.f28sf8b.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+const port = process.env.PORT || 8080;
 
-//UserSchema
-const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-  },
-  email: {
-    type: String,
-    unique: true,
-  },
-  password: {
-    type: String,
-    required: true,
-  },
-  contacts: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Contact',
-    },
-  ],
-});
-
-//ContactSchema
-const contactSchema = new mongoose.Schema({
-  formData: Object,
-  user: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User' 
-  },
-});
-
-const User = mongoose.model('User', userSchema);
-const Contact = mongoose.model('Contact', contactSchema);
+// requiring collections
+const User = require('./models/user.model.js');
+const Contact = require('./models/contacts.model.js');
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({extended:true}));
+const validateFormData = require('./middlewares/validateFormData.js');
+const verifyToken = require('./middlewares/verifyToken.js');
 
 //ErrorHandler
 app.use((err, req, res, next) => {
@@ -53,35 +21,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-const validateFormData = (req, res, next) => {
-  const { formData } = req.body;
-  if (!formData || Object.keys(formData).length === 0) {
-    return res.status(400).json({ error: 'Form data is required' });
-  }
-  next();
-};
-
-const authenticateUser = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    //you will have to use Bearer token and will include it in the header in value section
-    //Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2NWZmYTEyYWQ5ZjYxOGQ3ZjViNTkzYzEiLCJpYXQiOjE3MTEyNTE3NjcsImV4cCI6MTcxMTI1NTM2N30.nfVP56KJ1IWwTDu7QUI3lGQvA8CNlsbOyvdBjF6-C8U
-    return res.status(401).json({ error: 'Authorization header is required' });
-  }
-
-  const token = authHeader.split(' ')[1];
-  try {
-    const decodedToken = jwt.verify(token, 'your_secret_key');
-    const user = await User.findById(decodedToken.userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    req.user = user;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-};
 
 //Do register user
 app.post('/register', async (req, res) => {
@@ -96,7 +35,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-const jwt = require('jsonwebtoken');
 
 //Generate token
 const generateToken = (userId) => {
@@ -128,6 +66,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
+
 //CreateAnewUser
 app.post('/start', async (req, res) => {
   try {
@@ -150,47 +89,102 @@ app.post('/start', async (req, res) => {
   }
 });
 
+
 //GetAccessKey
-app.get('/access-key', async (req, res) => {
+app.get('/access-key', verifyToken ,async (req, res) => {
   try {
-    const { userDetails } = req.body;
-    const user = await User.findOne({ userDetails });
+    console.log(req.user.Data.UserID);
+    console.log(req.user);
+    const user = await User.findOne({ name : req.user.Data.UserID });
     if (user) {
-      res.json({ accessKey: user._id });
+      res.status(200).json({UserID:user.name, accessKey: user._id });
     } else {
-      res.status(404).json({ error: 'User not found' });
+      const newuser = new User({name:req.user.Data.UserID,contacts:[]});
+      await newuser.save();
+      res.status(200).json({UserID:newuser.name, accessKey: newuser._id});
     }
   } catch (error) {
-    res.status(500).json({ error: 'Failed to retrieve access key' });
+    console.log(error);
+    res.status(500).json({ error: 'Internal server Error' });
   }
 });
 
 //Create a new contact
-app.post('/submit', authenticateUser, validateFormData, async (req, res) => {
+// app.post('/submit', validateFormData, async (req, res) => {
+//   try {
+//     const { formData } = req.body;
+//     const user = req.user;
+//     const contact = new Contact({ formData, user: user._id });
+//     await contact.save();
+//     user.contacts.push(contact._id);
+//     await user.save();
+//     res.json({ message: 'Form submitted successfully' });
+//   } catch (error) {
+//     res.status(500).json({ error: 'Failed to submit form' });
+//   }
+// });
+
+app.post('/submit', validateFormData, async (req, res) => {
   try {
-    const { formData } = req.body;
-    const user = req.user;
-    const contact = new Contact({ formData, user: user._id });
-    await contact.save();
+    const access_key = req.body.access_key;
+    const formData = { ...req.body };
+    delete formData.access_key;
+    const contact = new Contact({ formData : formData, user: access_key });
+    await contact.save();  // new contact saved
+    // now using accesskey we will find to whom the contact submission belongs ,
+    // and then update the contacts array of that user with the new contact
+    // we will find and update User.findOneAndUpdate({_id:access_key},{push:{contacts: contact._id}})
+    const user = await User.findOne({_id:  access_key });
+    if (!user) {
+        throw new Error('User not found');
+    }
     user.contacts.push(contact._id);
     await user.save();
     res.json({ message: 'Form submitted successfully' });
   } catch (error) {
+    console.log(error);
     res.status(500).json({ error: 'Failed to submit form' });
   }
 });
 
-//FetchAllContacts
-app.get('/contacts', authenticateUser, async (req, res) => {
+app.delete('/delete-entry/:contactID',verifyToken, async (req,res)=>{
+  try{
+    const contactID = req.params.contactID;
+    const user = await User.findOne({name: req.user.Data.UserID});
+    if (!user) {
+        throw new Error('User not found');
+    }
+    await Contact.deleteOne({_id:contactID, user:user._id}).then(async ()=>{
+      user.contacts.remove(contactID);
+      await user.save();
+      res.status(200).json({message:'Contact Form Entry Deleted Succesfully'});
+    }).catch((err)=>{
+      res.status(500).json({error:err})
+    })
+
+  }catch (error){
+    res.status(500).json({message:'Internal Server Error',Error:error});
+  }
+});
+
+//FetchAllContacts        
+app.get('/fetch-contacts', verifyToken, async (req, res) => {
   try {
-    const user = req.user;
-    //without populate you will only return the id of the contact
-    const populatedUser = await User.findById(user._id).populate('contacts');
-    res.json(populatedUser.contacts);
+    const user = await User.findOne({ name :  req.user.Data.UserID});   // first we need to check if user exists or not
+    if (!user) {                                         // applying populate on null value gives error
+      const newuser = new User({name:req.user.Data.UserID,contacts:[]});
+      await newuser.save();
+      res.status(200).json({UserID:newuser.name,Data:[]})
+    } else {
+        const populatedUser = await user.populate('contacts');
+        res.status(200).json({UserID:user.name,Data:populatedUser.contacts});
+    }
   } catch (error) {
+    console.log(error);
     res.status(500).json({ error: 'Failed to fetch contacts' });
   }
 });
+
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
