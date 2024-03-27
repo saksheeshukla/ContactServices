@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verification</title>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #ffffff;
+    }
+
+    .center-text {
+      text-align: center;
+      font-family: Arial, sans-serif;
+      color: #d30404;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="center-text">
+    <img src="icons8-cross.gif" alt="Failed Verification GIF" width="60">
+    <h1>Unable To Submit The Form</h1>
+    <p>Contact to the site owner</p>
+    <p>Return Back To parent Site <a href="#" id="returnLink">Click Here</a></p>
+  </div>
+  <script>
+    document.getElementById("returnLink").addEventListener("click", function(event) {
+      event.preventDefault();
+      history.back(); 
+    });
+  </script>
+</body>
+</html>

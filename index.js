@@ -12,6 +12,7 @@ const Contact = require('./models/contacts.model.js');
 
 // Middleware
 app.use(express.json());
+app.use(express.static('public'));
 app.use(express.urlencoded({extended:true}));
 const validateFormData = require('./middlewares/validateFormData.js');
 const verifyToken = require('./middlewares/verifyToken.js');
@@ -147,10 +148,12 @@ app.post('/submit', validateFormData, async (req, res) => {
     }
     user.contacts.push(contact._id);
     await user.save();
-    res.json({ message: 'Form submitted successfully' });
+    // res.json({ message: 'Form submitted successfully' });
+    res.status(200).render('submitSuccess.ejs');
   } catch (error) {
     console.log(error);
-    res.status(500).json({ error: 'Failed to submit form' });
+    // res.status(500).json({ error: 'Failed to submit form' });
+    res.status(400).render('submitFailed.ejs');
   }
 });
 
